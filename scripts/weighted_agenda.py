@@ -11,10 +11,19 @@ from __future__ import annotations
 import argparse
 import datetime as _dt
 import json
+import os
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
-DATA_FILE = Path("files/weighted_agenda.json")
+DATA_FILE_ENV = "WEIGHTED_AGENDA_FILE"
+
+
+def get_data_file() -> Path:
+    """Return the JSON storage path, allowing override via env var."""
+    override = os.environ.get(DATA_FILE_ENV)
+    if override:
+        return Path(override).expanduser()
+    return Path("files/weighted_agenda.json")
 
 
 def _ensure_data_shape(data: Dict[str, Any]) -> Dict[str, Any]:
@@ -24,14 +33,16 @@ def _ensure_data_shape(data: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def load_data() -> Dict[str, Any]:
-    if not DATA_FILE.exists():
+    data_file = get_data_file()
+    if not data_file.exists():
         return {"tasks": [], "next_id": 1}
-    return _ensure_data_shape(json.loads(DATA_FILE.read_text(encoding="utf-8")))
+    return _ensure_data_shape(json.loads(data_file.read_text(encoding="utf-8")))
 
 
 def save_data(data: Dict[str, Any]) -> None:
-    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-    DATA_FILE.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    data_file = get_data_file()
+    data_file.parent.mkdir(parents=True, exist_ok=True)
+    data_file.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
 def parse_date(date_str: str) -> _dt.date:
@@ -116,6 +127,39 @@ def postpone_task(task_id: int, days: int = 1) -> Dict[str, Any]:
     raise SystemExit(f"Tarefa {task_id} não encontrada.")
 
 
+def edit_task(
+    task_id: int,
+    description: Optional[str] = None,
+    weight: Optional[int] = None,
+    scheduled_date: Optional[_dt.date] = None,
+) -> Dict[str, Any]:
+    if not any([description, weight, scheduled_date]):
+        raise SystemExit("Informe pelo menos uma opção para alterar.")
+
+    data = load_data()
+    for task in data["tasks"]:
+        if task["id"] == task_id:
+            if description is not None:
+                task["description"] = description.strip()
+            if weight is not None:
+                task["weight"] = weight
+            if scheduled_date is not None:
+                task["scheduled_date"] = format_date(scheduled_date)
+            save_data(data)
+            return task
+    raise SystemExit(f"Tarefa {task_id} não encontrada.")
+
+
+def remove_task(task_id: int) -> Dict[str, Any]:
+    data = load_data()
+    for idx, task in enumerate(data["tasks"]):
+        if task["id"] == task_id:
+            removed = data["tasks"].pop(idx)
+            save_data(data)
+            return removed
+    raise SystemExit(f"Tarefa {task_id} não encontrada.")
+
+
 def print_tasks(tasks: List[Dict[str, Any]], target_date: _dt.date, include_other_days: bool) -> None:
     if not tasks:
         scope = "todas as datas" if include_other_days else f"dia {format_date(target_date)}"
@@ -176,6 +220,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="Quantos dias mover para frente (padrão: 1)",
     )
 
+    edit_p = sub.add_parser("edit", help="Alterar uma tarefa já existente")
+    edit_p.add_argument("task_id", type=int)
+    edit_p.add_argument("--description", help="Nova descrição")
+    edit_p.add_argument("--weight", type=int, help="Novo peso")
+    edit_p.add_argument(
+        "--date",
+        type=parse_date,
+        help="Nova data no formato AAAA-MM-DD",
+    )
+
+    remove_p = sub.add_parser("remove", help="Exclui definitivamente uma tarefa")
+    remove_p.add_argument("task_id", type=int)
+
     return parser
 
 
@@ -201,6 +258,15 @@ def main() -> None:
             f"Tarefa #{task['id']} reagendada para {task['scheduled_date']} "
             f"(peso {task['weight']})."
         )
+    elif args.command == "edit":
+        task = edit_task(args.task_id, args.description, args.weight, args.date)
+        print(
+            f"Tarefa #{task['id']} atualizada: peso {task['weight']} para "
+            f"{task['scheduled_date']}."
+        )
+    elif args.command == "remove":
+        task = remove_task(args.task_id)
+        print(f"Tarefa #{task['id']} removida: {task['description']}")
     else:
         parser.error("Comando desconhecido")
 
