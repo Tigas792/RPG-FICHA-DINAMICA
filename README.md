@@ -25,3 +25,31 @@ Bases para criação dos Icons do personagem do usuário nos formatos .psd .mdp 
 Interface dinâmica e totalmente personalizavel para agrado do úsuario.
 
 ![Interface](https://cdn.discordapp.com/attachments/601118494527848498/817618601980067870/unknown.png)
+
+## Agenda ponderada em linha de comando
+
+Além da aplicação principal, o repositório agora inclui um utilitário simples
+para organizar atividades diárias com pesos/prioridades. O script
+`scripts/weighted_agenda.py` mantém um arquivo `files/weighted_agenda.json`
+com todas as tarefas, sempre reordenando o dia atual para que os itens de peso
+maior apareçam primeiro e adiando automaticamente as atividades que ficaram
+pendentes.
+
+### Como usar
+
+```bash
+# Adiciona uma atividade para hoje com peso 5
+python3 scripts/weighted_agenda.py add "Revisar personagem" 5
+
+# Lista o dia atual (já com tarefas remanescentes de dias anteriores movidas)
+python3 scripts/weighted_agenda.py list
+
+# Marca uma atividade como concluída
+python3 scripts/weighted_agenda.py done 1
+
+# Opcional: adia manualmente uma tarefa específica em 2 dias
+python3 scripts/weighted_agenda.py postpone 1 --days 2
+```
+
+Use `python3 scripts/weighted_agenda.py list --all` para visualizar toda a
+agenda ordenada por peso independentemente da data agendada.
